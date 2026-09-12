@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  api-gateway-service:
+    build:
+      context: ./api-gateway-service
+    container_name: api-gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVICES_MERCHANT_KEYVALIDATION-URL=http://merchant-service:8081/internal/validate-key
+      - SERVICES_MERCHANT_BASE-URL=http://merchant-service:8081
+      - SERVICES_PAYMENT_BASE-URL=http://payment-service:8082
+      - SERVICES_NOTIFICATION_BASE-URL=http://notification-service:8084
+      - SERVICES_SETTLEMENT_BASE-URL=http://settlement-service:8085
+
+  merchant-service:
+    build:
+      context: ./merchant-service
+    container_name: merchant-service
+    depends_on:
+      - kafka
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/merchant_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  payment-service:
+    build:
+      context: ./payment-service
+    container_name: payment-service
+    depends_on:
+      - kafka
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  notification-service:
+    build:
+      context: ./notification-service
+    container_name: notification-service
+    depends_on:
+      - kafka
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/notification_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      - SERVICES_MERCHANT_BASE-URL=http://merchant-service:8081
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  processor-service:
+    build:
+      context: ./processor-service
+    container_name: processor-service
+    depends_on:
+      - kafka
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/processor_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  settlement-service:
+    build:
+      context: ./settlement-service
+    container_name: settlement-service
+    depends_on:
+      - kafka
+      - localstack
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - AWS_S3_ENDPOINT=http://localstack:4566
+      - SPRING_DATASOURCE_URL=jdbc:mysql://host.docker.internal:3306/settlement_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://localhost:9092,PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+      KAFKA_LOG_RETENTION_HOURS: 168
+
+  localstack:
+    image: localstack/localstack:3.4
+    container_name: localstack
+    environment:
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
+      - EAGERLY_START_SERVICES=s3
+    volumes:
+      - localstack_data:/var/lib/localstack
+
+volumes:
+  localstack_data:

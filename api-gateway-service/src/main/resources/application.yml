@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway-service
+  main:
+    web-application-type: reactive
+
+logging:
+  level:
+    com.payment.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+
+services:
+  merchant:
+    base-url : http://localhost:8081
+    keyValidation-url: http://localhost:8081/internal/validate-key
+
+  payment:
+    base-url : http://localhost:8082
+
+  notification:
+    base-url : http://localhost:8084
+
+  settlement:
+    base-url : http://localhost:8085
